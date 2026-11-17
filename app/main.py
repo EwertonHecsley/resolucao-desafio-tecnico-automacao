@@ -1,12 +1,15 @@
 """Aplicação FastAPI principal da API de classificação."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.ai.factory import build_ai_provider
+from app.adapters.repository_postgres import PostgresMessageRepository
 from app.config import Settings
+from domain.ports import MessageRepository
 
 
 def get_settings() -> Settings:
@@ -23,7 +26,7 @@ def get_settings() -> Settings:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> None:  # noqa: ARG001
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Lifecycle manager da aplicação.
 
@@ -37,12 +40,33 @@ async def lifespan(app: FastAPI) -> None:  # noqa: ARG001
     # Falha cedo se AI_PROVIDER/fallbacks/chaves estiverem inválidos.
     build_ai_provider(settings)
 
+    # Cria as tabelas no startup (SPEC-04). Sem DATABASE_URL a aplicação
+    # segue sem persistência — útil em testes de health/unitários.
+    if settings.DATABASE_URL:
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        from app.adapters.models import Base
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        app.state.db_session_factory = async_sessionmaker(
+            engine, expire_on_commit=False
+        )
+        app.state.db_engine = engine
+        logging.info("Tabelas PostgreSQL garantidas no startup")
+    else:
+        app.state.db_session_factory = None
+        app.state.db_engine = None
+
     logging.info(f"{settings.PROJECT_NAME} v{settings.VERSION} iniciado")
     logging.info(f"Ambiente: {settings.ENVIRONMENT}")
     logging.info(f"AI Provider: {settings.AI_PROVIDER}")
 
     yield
 
+    if app.state.db_engine is not None:
+        await app.state.db_engine.dispose()
     logging.info(f"{settings.PROJECT_NAME} v{settings.VERSION} desligado")
 
 
@@ -88,3 +112,25 @@ def root() -> dict[str, str]:
         "message": f"{settings.PROJECT_NAME} v{settings.VERSION}",
         "status": "running",
     }
+
+
+async def get_message_repository(request: Request) -> AsyncIterator[MessageRepository]:
+    """Dependency do FastAPI que fornece o repositório de mensagens.
+
+    Args:
+        request: Request atual, usado para acessar o estado da aplicação.
+
+    Yields:
+        Implementação de ``MessageRepository`` com uma sessão por requisição.
+
+    Raises:
+        RuntimeError: Se a aplicação foi iniciada sem ``DATABASE_URL``.
+    """
+    factory = request.app.state.db_session_factory
+    if factory is None:
+        raise RuntimeError(
+            "Repositório de mensagens indisponível: DATABASE_URL não configurada"
+        )
+
+    async with factory() as session:
+        yield PostgresMessageRepository(session)
