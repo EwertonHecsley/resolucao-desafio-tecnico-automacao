@@ -18,3 +18,15 @@ def test_health_returns_json() -> None:
     client = TestClient(app)
     response = client.get("/health")
     assert "application/json" in response.headers["content-type"]
+
+
+def test_health_ai_responds() -> None:
+    """Verifica que GET /api/v1/health/ai retorna provider e responded."""
+    client = TestClient(app)
+    response = client.get("/api/v1/health/ai")
+    assert response.status_code == 200
+    data = response.json()
+    assert "provider" in data
+    assert "responded" in data
+    assert isinstance(data["responded"], bool)
+    assert data["provider"] in ["fake", "gemini", "groq", "openai"]

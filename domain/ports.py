@@ -53,6 +53,13 @@ class MessageRepository(Protocol):
 class Notifier(Protocol):
     """Porta para notificação externa (ex.: webhook do n8n)."""
 
-    async def notify(self, msg: ProcessedMessage) -> None:
-        """Dispara a notificação da mensagem processada."""
+    async def notify(self, msg: ProcessedMessage) -> bool:
+        """Dispara a notificação da mensagem processada.
+
+        Returns:
+            ``True`` se a notificação foi entregue com sucesso; ``False`` em
+            qualquer falha. A implementação nunca levanta exceção — a falha
+            é registrada em log e devolvida como ``False`` para não derrubar
+            a API (SPEC-05).
+        """
         ...

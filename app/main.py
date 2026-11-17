@@ -3,12 +3,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.adapters.ai.factory import build_ai_provider
 from app.adapters.repository_postgres import PostgresMessageRepository
+from app.api import routes
 from app.config import Settings
+from domain.errors import AIProviderError, InvalidAIResponseError
 from domain.ports import MessageRepository
 
 
@@ -76,6 +79,46 @@ app = FastAPI(
     description="API para classificação de mensagens com IA",
     lifespan=lifespan,
 )
+
+
+# Exception handlers (SPEC-06) — erros em JSON claro.
+@app.exception_handler(InvalidAIResponseError)
+async def invalid_ai_response_error_handler(_request: Request, exc: InvalidAIResponseError):
+    """Converte InvalidAIResponseError em HTTP 502 com detalhes claros."""
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content={
+            "detail": str(exc),
+            "provider": exc.provedor or "unknown",
+            "error": "invalid_ai_response",
+        },
+    )
+
+
+@app.exception_handler(AIProviderError)
+async def ai_provider_error_handler(_request: Request, exc: AIProviderError):
+    """Converte AIProviderError em HTTP 502 com detalhes claros."""
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content={
+            "detail": str(exc),
+            "provider": exc.provedor or "unknown",
+            "error": "ai_provider_error",
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_request: Request, exc: HTTPException):
+    """Converte HTTPException em JSON (401, 404, etc)."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+
+# Rotas (SPEC-06) — prefixo /api/v1.
+app.include_router(routes.router, prefix="/api/v1", tags=["classification"])
 
 
 # CORS middleware - configurado para produção
