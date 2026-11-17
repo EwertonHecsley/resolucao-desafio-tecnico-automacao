@@ -49,13 +49,58 @@ services:
       GENERIC_TIMEZONE: America/Fortaleza
       TZ: America/Fortaleza
     extra_hosts:
-      # Permite o n8n chamar a API rodando na sua máquina (host.docker.internal:8000)
+      # Permite o n8n chamar a API rodando na máquina (host.docker.internal:8000)
       - "host.docker.internal:host-gateway"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
-  # A API entra aqui na SPEC-08 (build do Dockerfile, depends_on postgres saudável).
+  api:
+    build:
+      context: .
+    container_name: classificador-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      # Usar postgres como host (dentro da rede do compose)
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/classificador
+      # Variáveis da API
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/classificador
+      # (Opcional) substituir por config real
+      API_KEY: ${API_KEY:-}
+    env_file:
+      - .env
+
+  # Service único para importar o workflow do n8n (executa uma vez)
+  n8n-import:
+    image: n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: classificador-n8n-import
+    depends_on:
+      n8n:
+        condition: service_healthy
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n_db
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?defina N8N_ENCRYPTION_KEY no .env}
+    entrypoint: n8n import:workflow --input=/workflows/classificador.json
+    volumes:
+      - ./n8n/workflows:/workflows:ro
+    profiles:
+      - import  # Executa apenas com --profile import
 
 volumes:
   postgres_data:
