@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: classificador-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-classificador}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Cria o banco do n8n (roda só na primeira inicialização do volume)
+      - ./docker/postgres-init/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-classificador}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: classificador-n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    environment:
+      # Banco do n8n
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n_db
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Segurança e acesso
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?defina N8N_ENCRYPTION_KEY no .env}
+      N8N_SECURE_COOKIE: "false"           # acesso por http://localhost
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false" # permite usar $env.N8N_WEBHOOK_SECRET nos nodes
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
+      # URLs e fuso
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: America/Fortaleza
+      TZ: America/Fortaleza
+    extra_hosts:
+      # Permite o n8n chamar a API rodando na sua máquina (host.docker.internal:8000)
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+
+  # A API entra aqui na SPEC-08 (build do Dockerfile, depends_on postgres saudável).
+
+volumes:
+  postgres_data:
+  n8n_data:

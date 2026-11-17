@@ -145,3 +145,4 @@ class ProcessedMessage(BaseModel):
     classificacao: Classification
     provedor: str
     criado_em: datetime
+    notificado: bool = False

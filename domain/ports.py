@@ -36,8 +36,16 @@ class MessageRepository(Protocol):
         """Persiste a mensagem e retorna a versão salva."""
         ...
 
+    async def get(self, msg_id: str) -> ProcessedMessage | None:
+        """Busca uma mensagem pelo ID. Retorna None se não existir."""
+        ...
+
     async def list(self, limit: int = 50) -> list[ProcessedMessage]:
         """Lista as últimas mensagens processadas (padrão: 50)."""
+        ...
+
+    async def mark_notified(self, msg_id: str) -> None:
+        """Marca a mensagem como notificada. Não falha se o ID não existir."""
         ...
 
 
