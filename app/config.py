@@ -47,8 +47,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
+    # Autenticação (SPEC-06) — vazio desativa a verificação de X-API-Key.
+    API_KEY: str = ""
+
     # Database (opcional - para próximos specs)
     DATABASE_URL: str = ""
+
 
     # n8n Webhook (SPEC-05) — vazio desativa as notificações (NullNotifier).
     N8N_WEBHOOK_URL: str = ""
