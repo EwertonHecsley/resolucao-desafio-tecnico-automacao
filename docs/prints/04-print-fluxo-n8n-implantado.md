@@ -12,6 +12,9 @@ n8n v2.48.4, disparadas por `POST /api/v1/messages` da API FastAPI.
 
 ## Print 1 — Visão geral do fluxo (canvas)
 
+<img width="887" height="396" alt="image" src="https://github.com/user-attachments/assets/e5a114a0-2cbf-4572-8ed2-a96ad8902cbe" />
+
+
 **Workflow:** `Classificador de Mensagens - IA + Automação`
 **ID:** `dyck01CHYIj0g8ZT` · **Ativo:** `true` · **Nodes:** 7 · **Conexões:** 8
 
