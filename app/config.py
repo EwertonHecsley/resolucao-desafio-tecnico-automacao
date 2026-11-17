@@ -1,8 +1,14 @@
-"""Configuração da aplicação usando Pydantic Settings."""
+"""Configuração da aplicação usando Pydantic Settings (SPEC-03).
+
+Todas as variáveis de IA são lidas do ambiente/``.env``. Segredos nunca
+são commitados — ver ``.env.example`` para os nomes esperados.
+"""
 
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+AIProviderName = Literal["fake", "gemini", "groq", "openai"]
 
 
 class Settings(BaseSettings):
@@ -23,7 +29,38 @@ class Settings(BaseSettings):
     HEALTH_CHECK_ENABLED: bool = True
 
     # AI Provider
-    AI_PROVIDER: Literal["openai", "google", "anthropic"] = "openai"
+    # fake: sem rede/chave (padrão); gemini/groq/openai: provedores reais.
+    AI_PROVIDER: AIProviderName = "fake"
+    # Lista separada por vírgula; vazio = sem fallback.
+    AI_FALLBACK_PROVIDERS: str = ""
+    AI_TIMEOUT_SECONDS: float = 20.0
+
+    # Gemini (API REST generateContent)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+
+    # Groq (endpoint compatível com OpenAI)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # OpenAI
     OPENAI_API_KEY: str = ""
-    GOOGLE_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
+    # Database (opcional - para próximos specs)
+    DATABASE_URL: str = ""
+
+    # n8n Webhook (opcional - para próximos specs)
+    N8N_WEBHOOK_URL: str = ""
+    N8N_WEBHOOK_SECRET: str = ""
+
+    def fallback_providers(self) -> list[str]:
+        """Retorna a lista de provedores de fallback em ordem.
+
+        Returns:
+            Nomes dos provedores de fallback (vazio se não configurado).
+        """
+        bruto = self.AI_FALLBACK_PROVIDERS.strip()
+        if not bruto:
+            return []
+        return [item.strip() for item in bruto.split(",") if item.strip()]

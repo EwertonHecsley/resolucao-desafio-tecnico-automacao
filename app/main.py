@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.adapters.ai.factory import build_ai_provider
 from app.config import Settings
 
 
@@ -32,6 +33,10 @@ async def lifespan(app: FastAPI) -> None:  # noqa: ARG001
 
     settings = get_settings()
     logging.basicConfig(level=logging.INFO)
+
+    # Falha cedo se AI_PROVIDER/fallbacks/chaves estiverem inválidos.
+    build_ai_provider(settings)
+
     logging.info(f"{settings.PROJECT_NAME} v{settings.VERSION} iniciado")
     logging.info(f"Ambiente: {settings.ENVIRONMENT}")
     logging.info(f"AI Provider: {settings.AI_PROVIDER}")
