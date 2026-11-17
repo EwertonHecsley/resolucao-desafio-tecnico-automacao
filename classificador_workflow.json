@@ -1,0 +1,151 @@
+{
+  "name": "Classificador de Mensagens - IA + Automação",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "classificador",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-01",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webhook-secret-auth",
+          "name": "Webhook Secret Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            { "name": "categoria", "stringValue": "={{ $json.classificacao?.categoria ?? 'outro' }}" },
+            { "name": "setor", "stringValue": "={{ $json.classificacao?.setor ?? 'geral' }}" },
+            { "name": "prioridade", "stringValue": "={{ $json.classificacao?.prioridade ?? 'media' }}" },
+            { "name": "sentimento", "stringValue": "={{ $json.classificacao?.sentimento ?? 'neutro' }}" },
+            { "name": "resumo", "stringValue": "={{ $json.classificacao?.resumo ?? '' }}" },
+            { "name": "confianca", "numberValue": "={{ $json.classificacao?.confianca ?? 0 }}" },
+            { "name": "texto_original", "stringValue": "={{ $json.entrada?.texto ?? '' }}" },
+            { "name": "remetente", "stringValue": "={{ $json.entrada?.remetente ?? 'desconhecido' }}" },
+            { "name": "canal", "stringValue": "={{ $json.entrada?.canal ?? 'webhook' }}" },
+            { "name": "mensagem_id", "stringValue": "={{ $json.id ?? '' }}" },
+            { "name": "provedor_ia", "stringValue": "={{ $json.provedor ?? 'unknown' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "edit-fields-01",
+      "name": "Extrair Campos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "cond-prioridade-alta",
+              "leftValue": "={{ $json.prioridade }}",
+              "rightValue": "alta",
+              "operator": { "type": "string", "operation": "equals", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-node-01",
+      "name": "Prioridade Alta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Caminho URGENTE — prioridade alta\nconst input = $input.first().json;\nreturn [{\n  json: {\n    ...input,\n    destino: `${input.setor}-urgente@empresa.com`,\n    assunto: `[URGENTE] ${input.categoria} - ${input.setor}`,\n    status: 'encaminhado_urgente'\n  },\n  pairedItem: { item: 0 }\n}];"
+      },
+      "id": "code-high",
+      "name": "Encaminhar Urgente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Caminho NORMAL — prioridade média/baixa\nconst input = $input.first().json;\nreturn [{\n  json: {\n    ...input,\n    destino: `${input.setor}@empresa.com`,\n    assunto: `[${input.categoria}] ${input.setor}`,\n    status: 'encaminhado_normal'\n  },\n  pairedItem: { item: 0 }\n}];"
+      },
+      "id": "code-normal",
+      "name": "Encaminhar Normal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta mensagem de notificação formatada\nconst cat = $input.first().json.categoria;\nconst setor = $input.first().json.setor;\nconst prioridade = $input.first().json.prioridade;\nconst sentimento = $input.first().json.sentimento;\nconst resumo = $input.first().json.resumo;\nconst texto = $input.first().json.texto_original;\nconst remetente = $input.first().json.remetente;\nconst confianca = $input.first().json.confianca;\n\nlet emoji = '\\U0001F4CB';\nif (cat === 'reclamacao') emoji = '\\U0001F6A8';\nelse if (cat === 'elogio') emoji = '\\u2B50';\nelse if (prioridade === 'alta') emoji = '\\u26A1';\n\nconst notificacao = `*${emoji} Nova Mensagem Classificada*\\n\\n` +\n  `• *Categoria:* ${cat}\\n` +\n  `• *Setor:* ${setor}\\n` +\n  `• *Prioridade:* ${prioridade}\\n` +\n  `• *Sentimento:* ${sentimento}\\n` +\n  `• *Confiança:* ${(confianca * 100).toFixed(0)}%\\n` +\n  `• *Resumo:* ${resumo}\\n` +\n  `• *Remetente:* ${remetente}\\n\\n` +\n  `*_Original:_*\\n${texto}`;\n\nreturn [{ json: { notificacao, setor, prioridade, categoria: cat } }];"
+      },
+      "id": "code-format",
+      "name": "Formatar Notificação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webhook.site/placeholder",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "body": "={{ $json.notificacao }}",
+        "options": {}
+      },
+      "id": "http-log",
+      "name": "Registrar Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300],
+      "notes": "Em produção: substituir por Slack / Email / Google Sheets"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"received\",\n  \"message\": \"Mensagem registrada com sucesso no n8n\",\n  \"data\": {{ $json }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1800, 300]
+    }
+  ],
+  "nodeTypes": {},
+  "stickyNotes": [],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Extrair Campos", "type": "main", "index": 0 }]] },
+    "Extrair Campos": { "main": [[{ "node": "Prioridade Alta?", "type": "main", "index": 0 }]] },
+    "Prioridade Alta?": {
+      "main": [
+        [{ "node": "Encaminhar Urgente", "type": "main", "index": 0 }],
+        [{ "node": "Encaminhar Normal", "type": "main", "index": 0 }]
+      ]
+    },
+    "Encaminhar Urgente": { "main": [[{ "node": "Formatar Notificação", "type": "main", "index": 0 }]] },
+    "Encaminhar Normal": { "main": [[{ "node": "Formatar Notificação", "type": "main", "index": 0 }]] },
+    "Formatar Notificação": { "main": [[{ "node": "Registrar Log", "type": "main", "index": 0 }]] },
+    "Registrar Log": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": []
+}
