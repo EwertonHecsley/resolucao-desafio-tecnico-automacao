@@ -3,7 +3,7 @@
 Depende apenas de domain/ports.py — não de implementações concretas.
 """
 
-from domain.ports import IAProvider
+from domain.ports import AIProvider
 
 
 class Classifier:
@@ -13,41 +13,31 @@ class Classifier:
     Injeção de dependência via construtor.
     """
 
-    def __init__(self, ai_provider: IAProvider) -> None:
+    def __init__(self, ai_provider: AIProvider) -> None:
         """
         Inicializa o classifier com um provider de IA.
 
         Args:
-            ai_provider: Implementação de IAProvider (pode ser fake ou real).
+            ai_provider: Implementação de AIProvider (pode ser fake ou real).
         """
         self.ai_provider = ai_provider
 
-    async def classify(self, message: str) -> str:
+    async def classificar(self, system_prompt: str, user_prompt: str) -> str:
         """
-        Classifica uma mensagem.
+        Gera a classificação bruta (JSON em texto) via provedor de IA.
+
+        A lógica real de validação da resposta e retry (máx. 2) será
+        implementada na SPEC-02.
 
         Args:
-            message: Mensagem a ser classificada.
+            system_prompt: Prompt de sistema com as regras de classificação.
+            user_prompt: Prompt do usuário (mensagem + metadados).
 
         Returns:
-            Categoria de classificação.
+            Texto bruto retornado pelo provedor (esperado: JSON).
         """
-        # TODO: (SPEC-xx) Adicionar lógica de retry aqui
-        # Se falhar, tentar novamente (máx. 2 vezes)
-        # Se falhar novamente, levantar erro
-        return await self.ai_provider.classify(message=message)
-
-
-async def classify_message(message: str, ai_provider: IAProvider) -> str:
-    """
-    Função auxiliar para classificação de mensagens.
-
-    Args:
-        message: Mensagem a ser classificada.
-        ai_provider: Implementação de IAProvider.
-
-    Returns:
-        Categoria de classificação.
-    """
-    classifier = Classifier(ai_provider=ai_provider)
-    return await classifier.classify(message=message)
+        # TODO: (SPEC-02) Validar resposta com Pydantic; retry (máx. 2) e erro 502.
+        return await self.ai_provider.generate_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )

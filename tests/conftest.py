@@ -4,7 +4,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from adapters.ai.base import FakeAIProvider
+from app.adapters.ai import FakeAIProvider
 from app.main import app
 
 

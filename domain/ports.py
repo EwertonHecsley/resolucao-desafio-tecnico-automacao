@@ -1,53 +1,50 @@
-"""Ports de domínio - interfaces definidas pelo negócio."""
+"""Portas de domínio — contratos definidos pelo negócio (inversão de dependência).
 
-from abc import ABC, abstractmethod
-from typing import Any
+As camadas externas (``adapters/``, ``services/``, ``app/``) dependem apenas
+destas interfaces. Nenhuma implementação concreta de IA vive aqui.
+"""
 
-from pydantic import BaseModel, ConfigDict
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from domain.models import ProcessedMessage
 
 
-class IAProvider(ABC):
+@runtime_checkable
+class AIProvider(Protocol):
     """Porta para provedores de IA.
 
-    Esta interface representa a abstração de classificação de mensagens.
-    Qualquer provedor real (OpenAI, Google, etc.) deve implementar este contrato.
+    Qualquer provedor real (OpenAI, Google, etc.) deve implementar este
+    contrato. O SDK do provedor só pode ser importado dentro de
+    ``adapters/ai/``.
     """
 
-    @abstractmethod
-    async def classify(
-        self,
-        message: str,
-        meta: dict[str, Any] | None = None,
-    ) -> str:
-        """
-        Classifica uma mensagem enviada por um cliente.
+    name: str
 
-        Args:
-            message: A mensagem a ser classificada.
-            meta: Metadatos opcionais (timestamp, user_id, etc.).
-
-        Returns:
-            A categoria de classificação (ex: "suporte técnico").
-
-        Raises:
-            ClassificationError: Se houver erro ao classificar.
-        """
-        pass
+    async def generate_json(self, system_prompt: str, user_prompt: str) -> str:
+        """Retorna o texto bruto (esperado: JSON). Levanta AIProviderError em falha."""
+        ...
 
 
-class ClassificationResult(BaseModel):
-    """Resultado de uma classificação realizada pela IA."""
+@runtime_checkable
+class MessageRepository(Protocol):
+    """Porta para persistência de mensagens processadas."""
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "category": "suporte técnico",
-                "confidence": 0.95,
-                "reasoning": "Mensagem menciona pedido e produto",
-            }
-        }
-    )
+    async def save(self, msg: ProcessedMessage) -> ProcessedMessage:
+        """Persiste a mensagem e retorna a versão salva."""
+        ...
 
-    category: str
-    confidence: float
-    reasoning: str = ""
+    async def list(self, limit: int = 50) -> list[ProcessedMessage]:
+        """Lista as últimas mensagens processadas (padrão: 50)."""
+        ...
+
+
+@runtime_checkable
+class Notifier(Protocol):
+    """Porta para notificação externa (ex.: webhook do n8n)."""
+
+    async def notify(self, msg: ProcessedMessage) -> None:
+        """Dispara a notificação da mensagem processada."""
+        ...

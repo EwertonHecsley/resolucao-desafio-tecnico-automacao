@@ -5,7 +5,7 @@ Cria instâncias de provedores baseados na variável de ambiente AI_PROVIDER.
 
 
 class Factory:
-    """Factory para criar instâncias de IAProvider."""
+    """Factory para criar instâncias de provedores de IA (AIProvider)."""
 
     @staticmethod
     def create() -> str:
