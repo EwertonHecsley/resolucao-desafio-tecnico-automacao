@@ -1,0 +1,449 @@
+{
+  "name": "Classificador de Mensagens - IA + Automação",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "classificador",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-01",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "classificador-webhook-01"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f-id",
+              "name": "id",
+              "value": "={{ $json.body.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f-texto",
+              "name": "texto",
+              "value": "={{ $json.body.entrada.texto }}",
+              "type": "string"
+            },
+            {
+              "id": "f-categoria",
+              "name": "categoria",
+              "value": "={{ $json.body.classificacao.categoria }}",
+              "type": "string"
+            },
+            {
+              "id": "f-setor",
+              "name": "setor",
+              "value": "={{ $json.body.classificacao.setor }}",
+              "type": "string"
+            },
+            {
+              "id": "f-prioridade",
+              "name": "prioridade",
+              "value": "={{ $json.body.classificacao.prioridade }}",
+              "type": "string"
+            },
+            {
+              "id": "f-sentimento",
+              "name": "sentimento",
+              "value": "={{ $json.body.classificacao.sentimento }}",
+              "type": "string"
+            },
+            {
+              "id": "f-resumo",
+              "name": "resumo",
+              "value": "={{ $json.body.classificacao.resumo }}",
+              "type": "string"
+            },
+            {
+              "id": "f-confianca",
+              "name": "confianca",
+              "value": "={{ $json.body.classificacao.confianca }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-normalize-01",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-baixa-confianca",
+              "leftValue": "={{ $json.confianca }}",
+              "rightValue": 0.6,
+              "operator": {
+                "type": "number",
+                "operation": "lt",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-confianca-01",
+      "name": "Baixa Confiança?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r-setor",
+              "name": "setor",
+              "value": "geral",
+              "type": "string"
+            },
+            {
+              "id": "r-destino",
+              "name": "destino",
+              "value": "={{ 'geral@empresa.com' }}",
+              "type": "string"
+            },
+            {
+              "id": "r-status",
+              "name": "status",
+              "value": "revisao_humana",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-revisao-01",
+      "name": "Revisão Humana",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        960,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw-suporte",
+                    "leftValue": "={{ $json.setor }}",
+                    "rightValue": "suporte",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "suporte"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw-financeiro",
+                    "leftValue": "={{ $json.setor }}",
+                    "rightValue": "financeiro",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "financeiro"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw-comercial",
+                    "leftValue": "={{ $json.setor }}",
+                    "rightValue": "comercial",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "comercial"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw-logistica",
+                    "leftValue": "={{ $json.setor }}",
+                    "rightValue": "logistica",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "logistica"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw-geral",
+                    "leftValue": "={{ $json.setor }}",
+                    "rightValue": "geral",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "geral"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "fallbackOutputKey": "geral"
+        }
+      },
+      "id": "switch-setor-01",
+      "name": "Roteador por Setor",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        960,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Encaminhamento por setor (sem credenciais externas — SPEC-07)\nconst item = $input.first().json;\nconst setor = item.setor || 'geral';\nreturn [{\n  json: {\n    ...item,\n    setor,\n    destino: `${setor}@empresa.com`,\n    mensagem: `[${item.categoria}] ${item.texto}`,\n    status: 'encaminhado',\n  },\n  pairedItem: { item: 0 },\n}];"
+      },
+      "id": "code-encaminhar-01",
+      "name": "Encaminhar Setor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'encaminhado', setor: $json.setor }) }}",
+        "options": {}
+      },
+      "id": "respond-01",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Baixa Confiança?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixa Confiança?": {
+      "main": [
+        [
+          {
+            "node": "Revisão Humana",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Roteador por Setor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisão Humana": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roteador por Setor": {
+      "main": [
+        [
+          {
+            "node": "Encaminhar Setor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Encaminhar Setor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Encaminhar Setor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Encaminhar Setor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Encaminhar Setor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Encaminhar Setor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encaminhar Setor": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
