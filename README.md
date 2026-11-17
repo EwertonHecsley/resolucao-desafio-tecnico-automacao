@@ -232,6 +232,7 @@ docker compose up --build
 | --- | --- | --- |
 | API | http://localhost:8000 | `/health`, `/docs`, `/api/v1/messages` |
 | n8n | http://localhost:5678 | Editor de fluxos |
+| Frontend Sandbox | http://localhost:8501 | Interface web para testar (com --profile demo) |
 | Postgres | localhost:5432 | bancos `classificador` e `n8n_db` |
 
 Importar o workflow do n8n automaticamente (uma vez, após o n8n ficar saudável):
@@ -244,6 +245,18 @@ Ou manualmente no n8n: **Import from File** → `n8n/workflows/classificador.jso
 → **ativar o fluxo (toggle)**. A rota usada é `/webhook/classificador`
 (produção). O toggle precisa estar ligado, senão a API receberá falha na
 notificação e `notificado` ficará `false`.
+
+Para iniciar o **Frontend Sandbox** (interface web para testes):
+
+```bash
+docker compose --profile demo up --build frontend
+```
+
+Isso abrirá http://localhost:8501 com:
+- Testes rápidos (classificação sem salvar)
+- Fluxo completo (salvar + notificar n8n)
+- Histórico de mensagens
+- Visualização em tempo real do status do n8n
 
 `docker compose down && docker compose up` preserva os volumes `postgres_data`
 e `n8n_data` (dados do Postgres e fluxos do n8n). Para recriar do zero, use
@@ -379,5 +392,6 @@ montado somente-leitura em `/workflows`.
 - [x] JSON do n8n exportado (`n8n/workflows/classificador.json`, sem credenciais)
 - [x] `.env.example` sem segredos e nenhuma chave no repositório (histórico conferido)
 - [x] Diferencial: Dockerfile + docker-compose.yml + instruções detalhadas no README
+- [x] Frontend Sandbox com Streamlit para testes (com --profile demo)
 - [x] Link do repositório GitHub:
-      https://github.com/EwertonHecsley/resolucao-desafio-tecnico-automacao
+       https://github.com/EwertonHecsley/resolucao-desafio-tecnico-automacao
