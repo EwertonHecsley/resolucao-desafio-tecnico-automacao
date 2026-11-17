@@ -25,3 +25,37 @@ usado e `notify()` retorna `False` sem fazer requisição.
 
 O notifier **nunca derruba a API**: timeout, falha de conexão ou resposta
 não-2xx geram um log de aviso (sem o segredo) e retorno `False`.
+
+## Docker Compose (SPEC-08)
+
+Suba tudo (Postgres + n8n + API) com um comando:
+
+```bash
+cp .env.example .env
+# gere a chave de criptografia do n8n e cole em N8N_ENCRYPTION_KEY:
+openssl rand -hex 32
+docker compose up --build
+```
+
+Serviços:
+
+| Serviço | URL | Descrição |
+| --- | --- | --- |
+| API | http://localhost:8000 | `/health`, `/api/v1/messages` |
+| n8n | http://localhost:5678 | Editor de fluxos |
+| Postgres | localhost:5432 | bancos `classificador` e `n8n_db` |
+
+O workflow do n8n pode ser importado automaticamente:
+
+```bash
+docker compose --profile import run --rm n8n-import
+```
+
+Ou manualmente no n8n: **Import from File** → `n8n/workflows/classificador.json`
+→ ativar o fluxo (toggle). A rota usada é `/webhook/classificador` (produção).
+
+`docker compose down && docker compose up` preserva os volumes `postgres_data`
+e `n8n_data` (dados do Postgres e fluxos do n8n).
+
+**Tamanho da imagem da API:** ~290 MB (`python:3.12-slim` + venv, multi-stage,
+usuário não-root). Apenas dependências de runtime instaladas (sem testes/linters).
