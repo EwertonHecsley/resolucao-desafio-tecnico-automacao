@@ -175,20 +175,37 @@ def main():
         )
         st.stop()
 
-    # Exige instância do menu lateral DENTRO da render_home
-    pending = st.session_state.pop("pending_text", "")
-    modo = st.session_state.pop("modo_teste", "Resposta rápida (sem salvar)")
-    refresh_btn = st.session_state.pop("refresh_btn", False)
+    # Menu lateral (sem key: evita conflito de sessão ao mudar de página)
+    with st.sidebar:
+        st.header("⚙️ Configurações")
+        st.info(
+            f"🤖 IA real ativa: **{ai_config['provider']}**"
+            + (f" (`{ai_config['model']}`)" if ai_config.get("model") else "")
+        )
 
-    st.session_state.page = render_home(pending, modo, refresh_btn)
+        st.divider()
 
-    if st.session_state.page == "🧪 Classificar":
+        st.header("📋 Menu")
+        page = st.radio(
+            "Navegação",
+            ["🏠 Início", "🧪 Classificar", "📊 Histórico"],
+            index=["🏠 Início", "🧪 Classificar", "📊 Histórico"].index(
+                st.session_state.get("page", "🏠 Início")
+            ),
+            label_visibility="collapsed"
+        )
+        st.session_state.page = page
+
+    # Renderiza a página selecionada
+    if st.session_state.page == "🏠 Início":
+        render_home()
+    elif st.session_state.page == "🧪 Classificar":
         render_classifier()
     elif st.session_state.page == "📊 Histórico":
         render_history()
 
 
-def render_home(pending_text: str = "", modo_teste: str = "Resposta rápida (sem salvar)", refresh: bool = False):
+def render_home():
     """Página inicial: visão geral do sandbox (sem executar testes)."""
     st.header("📖 Como funciona o Sandbox")
 
@@ -266,7 +283,8 @@ def render_home(pending_text: str = "", modo_teste: str = "Resposta rápida (sem
             with col1:
                 if st.button(ex, key=f"ex_{hash(ex)}"):
                     st.session_state.pending_text = ex
-                    return "🧪 Classificar"
+                    st.session_state.page = "🧪 Classificar"
+                    st.rerun()
             with col2:
                 # Copiar para área de transferência usando HTML com CSP
                 ex_js = ex.replace("\\", "\\\\").replace("'", "\\'")
