@@ -12,6 +12,7 @@ from frontend.app import (  # noqa: F401 — reexporta para os asserts abaixo
     get_ai_status,
     health_check,
     save_and_notify,
+    select_message_example,
 )
 
 
@@ -67,6 +68,17 @@ def sample_message():
 def test_api_base_url():
     """Testa se a URL base está correta."""
     assert API_BASE_URL == "http://api:8000/api/v1"
+
+
+def test_select_message_example_opens_manual_classification(monkeypatch):
+    """Selecionar exemplo abre a classificação com a mensagem preenchida."""
+    session_state = {}
+    monkeypatch.setattr("frontend.app.st.session_state", session_state)
+
+    select_message_example("Meu pedido ainda não chegou")
+
+    assert session_state["pending_text"] == "Meu pedido ainda não chegou"
+    assert session_state["page"] == "🧪 Classificar"
 
 
 @patch("frontend.app.requests.get")

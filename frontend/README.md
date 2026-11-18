@@ -62,7 +62,7 @@ SANDBOX_API_KEY = "kodie-sandbox-token"
 
 ### 🏠 Início
 - Visão geral do fluxo (como funciona o sandbox)
-- Exemplos de mensagens que abrem a tela de classificação
+- Exemplos de mensagens: clique para copiar e abrir a tela de classificação
 
 ### 🧪 Classificar
 - Campo de input para mensagens

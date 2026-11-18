@@ -1,10 +1,17 @@
 
+from pathlib import Path
+
 import requests
 import streamlit as st
-from streamlit.components.v1 import html as st_html
+import streamlit.components.v1 as components
 
 # Configurações da API
 API_BASE_URL = "http://api:8000/api/v1"
+copy_message_button = components.declare_component(
+    "copy_message_button",
+    path=str(Path(__file__).parent / "components" / "copy_message_button"),
+)
+
 
 @st.cache_resource
 def get_api_key() -> str:
@@ -132,15 +139,22 @@ def get_ai_status():
         return {"provider": "unknown", "responded": False, "error": str(e)}
     return {"provider": "unknown", "responded": False}
 
+
+def select_message_example(text: str) -> None:
+    """Prepara a mensagem de exemplo e abre a classificação manual."""
+    st.session_state["pending_text"] = text
+    st.session_state["page"] = "🧪 Classificar"
+
+
 def main():
     st.set_page_config(
-        page_title="Kodie Sandbox - IA Classifier",
+        page_title="Área Sandbox - IA Classifier",
         page_icon="🎯",
         layout="wide",
         initial_sidebar_state="expanded"
     )
 
-    st.title("🎯 Kodie Sandbox - Classificador com IA")
+    st.title("🎯 Área Sandbox - Classificador com IA")
     st.markdown("""
     Ambiente de demonstração para testar o classificador de mensagens com IA.
     O fluxo completo inclui: classificação → persistência → notificação n8n.
@@ -279,42 +293,22 @@ def render_home():
             "Obrigado pelo atendimento, ótimo produto!",
         ]
         for ex in exemplos:
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                if st.button(ex, key=f"ex_{hash(ex)}"):
-                    st.session_state.pending_text = ex
-                    st.session_state.page = "🧪 Classificar"
+            copied_example = copy_message_button(
+                text=ex,
+                key=f"copy_example_{ex}",
+                default=None,
+            )
+            if (
+                copied_example
+                and copied_example.get("clickId")
+                != st.session_state.get("handled_copy_click")
+            ):
+                st.session_state.handled_copy_click = copied_example["clickId"]
+                if copied_example.get("copied"):
+                    select_message_example(copied_example["text"])
                     st.rerun()
-            with col2:
-                # Copiar para área de transferência usando HTML com CSP
-                ex_js = ex.replace("\\", "\\\\").replace("'", "\\'")
-                html_code = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Copy to Clipboard</title>
-                    <script>
-                        function copyText(text) {{
-                            navigator.clipboard.writeText(text)
-                            document.body.style.backgroundColor = '#dcfce7';
-                            setTimeout(() => {{ document.body.style.backgroundColor = ''; }}, 300);
-                            alert('Copiado para área de transferência!');
-                        }}
-                    </script>
-                </head>
-                <body>
-                    <button onclick="copyText('{ex_js}')" 
-                            style="background-color: #f1f5f9; border: 1px solid #cbd5e1;
-                                   padding: 8px 12px; border-radius: 6px; cursor: pointer;
-                                   font-size: 14px; display: inline-flex; align-items: center;
-                                   gap: 4px;">
-                        📋 Copiar
-                    </button>
-                </body>
-                </html>
-                """
-                st_html(html_code, height=60, scrolling=False, key=f"copy_html_{hash(ex)}")
+                else:
+                    st.error("Não foi possível copiar a mensagem para a área de transferência.")
 
 
 def render_classifier():
