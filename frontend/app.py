@@ -205,7 +205,7 @@ def render_home():
     delta_ia = "Operacional" if ai_status["responded"] else "Sem resposta"
 
     # Cards de estatísticas
-    col1, col2, col3 = st.columns(2)
+    col1, col2 = st.columns(2)
 
     with col1:
         st.metric("Provedor de IA", provider, delta=delta_ia)

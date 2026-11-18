@@ -6,14 +6,10 @@ erro 502 nas próximas SPECs).
 
 from __future__ import annotations
 
+import json
 from typing import Final
 
-import json
-
-from pydantic import ValidationError
-
 from domain.errors import AIProviderError
-from domain.models import Classification
 
 #: Item especial que, ao ser consumido da fila, levanta AIProviderError.
 MARCADOR_ERRO: Final[str] = "__erro__"

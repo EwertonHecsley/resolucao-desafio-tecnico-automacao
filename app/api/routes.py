@@ -175,8 +175,13 @@ async def health_ai(ai=Depends(get_ai_provider)):
     """
     logger.debug("Health check do provedor de IA: %s", ai.name)
     try:
-        # Chamada dummy para testar se o provedor responde
-        await ai.generate_json("test", "test")
+        # Chamada dummy para testar se o provedor responde. O conteúdo
+        # menciona "json" porque o Groq exige a palavra nas mensagens
+        # quando response_format é json_object (senão devolve HTTP 400).
+        await ai.generate_json(
+            "Responda apenas com JSON.",
+            'Teste de saúde: retorne um objeto JSON {"ok": true}.',
+        )
         return {"provider": ai.name, "responded": True}
     except Exception as e:
         logger.warning("Provedor de IA respondeu com erro: %s", e)
