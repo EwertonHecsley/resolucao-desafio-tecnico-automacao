@@ -8,6 +8,7 @@ from frontend.app import (  # noqa: F401 — reexporta para os asserts abaixo
     API_BASE_URL,
     classify_text,
     fetch_recent_messages,
+    get_ai_config,
     get_ai_status,
     health_check,
     save_and_notify,
@@ -124,15 +125,6 @@ def test_classify_text_success(mock_post, sample_classification):
 
     assert result == sample_classification
     assert mock_post.call_args[0][0] == f"{API_BASE_URL}/classify"
-
-
-@patch("frontend.app.requests.post")
-def test_classify_text_with_real_ai(mock_post, sample_classification):
-    """Testa classificação com IA real."""
-    mock_post.return_value = MockResponse(200, sample_classification)
-
-    classify_text("Meu pedido não chegou", use_real_ai=True)
-
     assert mock_post.call_args[1]["timeout"] == 30
 
 
@@ -205,3 +197,37 @@ def test_get_ai_status_exception(mock_get):
     assert result["provider"] == "unknown"
     assert result["responded"] is False
     assert "Connection refused" in result["error"]
+
+
+@patch("frontend.app.requests.get")
+def test_get_ai_config_real(mock_get):
+    """Config de IA real é reportada pelo backend."""
+    mock_get.return_value = MockResponse(
+        200,
+        {"provider": "groq", "is_real": True, "key_configured": True, "model": "llama"},
+    )
+    result = get_ai_config()
+    assert result["is_real"] is True
+    assert result["key_configured"] is True
+    mock_get.assert_called_once_with(f"{API_BASE_URL}/config/ai", timeout=5)
+
+
+@patch("frontend.app.requests.get")
+def test_get_ai_config_fake(mock_get):
+    """Config com provider fake é reportada como não real."""
+    mock_get.return_value = MockResponse(
+        200,
+        {"provider": "fake", "is_real": False, "key_configured": False, "model": ""},
+    )
+    result = get_ai_config()
+    assert result["is_real"] is False
+    assert result["key_configured"] is False
+
+
+@patch("frontend.app.requests.get")
+def test_get_ai_config_exception(mock_get):
+    """Falha de rede retorna config segura (bloqueia sandbox)."""
+    mock_get.side_effect = Exception("Connection refused")
+    result = get_ai_config()
+    assert result["is_real"] is False
+    assert result["key_configured"] is False

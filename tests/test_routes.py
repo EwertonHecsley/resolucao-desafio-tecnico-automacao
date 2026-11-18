@@ -48,6 +48,21 @@ CORPO_MENSAGEM = {
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def override_settings():
+    """Fixture para sobrescrever Settings via dependency injection."""
+    from app.api.deps import get_settings
+    from app.config import Settings
+
+    def _apply(**kwargs):
+        settings = Settings(**kwargs)
+        app.dependency_overrides[get_settings] = lambda: settings
+        return settings
+
+    yield _apply
+    app.dependency_overrides.clear()
+
+
 class RepositorioEmMemoria:
     """Implementação em memória da porta MessageRepository para testes."""
 
@@ -322,3 +337,42 @@ def resposta_classificacao():
     from domain.models import Classification
 
     return Classification.model_validate_json(JSON_CLASSIFICACAO)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/config/ai
+# ---------------------------------------------------------------------------
+
+
+def test_config_ai_provider_fake(client, override_settings):
+    """Provider fake é sinalizado como não real e sem chave."""
+    override_settings(AI_PROVIDER="fake")
+    response = client.get("/api/v1/config/ai")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] == "fake"
+    assert data["is_real"] is False
+    assert data["key_configured"] is False
+
+
+def test_config_ai_provider_real_com_chave(client, override_settings):
+    """Provider real com chave é sinalizado corretamente."""
+    override_settings(AI_PROVIDER="groq", GROQ_API_KEY="chave-teste", GROQ_MODEL="llama")
+    response = client.get("/api/v1/config/ai")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] == "groq"
+    assert data["is_real"] is True
+    assert data["key_configured"] is True
+    assert data["model"] == "llama"
+    assert "chave-teste" not in response.text
+
+
+def test_config_ai_provider_real_sem_chave(client, override_settings):
+    """Provider real sem chave é sinalizado como não configurado."""
+    override_settings(AI_PROVIDER="gemini", GEMINI_API_KEY="")
+    response = client.get("/api/v1/config/ai")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_real"] is True
+    assert data["key_configured"] is False

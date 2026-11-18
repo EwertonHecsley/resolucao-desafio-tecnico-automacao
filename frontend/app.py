@@ -5,18 +5,15 @@ import streamlit as st
 # Configurações da API
 API_BASE_URL = "http://api:8000/api/v1"
 
-# Configurações de autenticação
-SANDBOX_API_KEY = "kodie-sandbox-token"
-
 @st.cache_resource
-def get_api_key():
-    """Retorna a API key do sandbox.
+def get_api_key() -> str:
+    """Retorna a API key do sandbox (token de autenticação da API).
 
     Lê SANDBOX_API_KEY (não API_KEY): o Streamlit promove chaves de
     secrets.toml para os.environ, e API_KEY é a setting de autenticação
     do backend (SPEC-06) — colisão que exigiria X-API-Key nas rotas.
     """
-    return st.secrets.get("SANDBOX_API_KEY", "") or SANDBOX_API_KEY
+    return str(st.secrets.get("SANDBOX_API_KEY", ""))
 
 def health_check():
     """Verifica se a API está saudável."""
@@ -42,8 +39,8 @@ def fetch_recent_messages(limit=10):
         st.error(f"Erro ao buscar histórico: {str(e)}")
         return []
 
-def classify_text(texto, use_real_ai=False):
-    """Classifica um texto."""
+def classify_text(texto):
+    """Classifica com IA real, sem salvar nem notificar."""
     try:
         payload = {
             "texto": texto,
@@ -56,22 +53,11 @@ def classify_text(texto, use_real_ai=False):
         if api_key:
             headers["X-API-Key"] = api_key
 
-        # Se usar IA real, chama /api/v1/classify (salva e notifica)
-        # Se usar modo sandbox, chama /api/v1/classify (apenas classifica)
-        if use_real_ai:
-            # Fluxo completo com persistência e notificação
-            endpoint = "/messages"
-            timeout = 30
-        else:
-            # Apenas classificação (sem persistência)
-            endpoint = "/classify"
-            timeout = 5
-
         response = requests.post(
-            f"{API_BASE_URL}{endpoint}",
+            f"{API_BASE_URL}/classify",
             json=payload,
             headers=headers,
-            timeout=timeout
+            timeout=30
         )
 
         if response.status_code == 200:
@@ -119,6 +105,17 @@ def save_and_notify(texto):
         st.error(f"Erro ao salvar: {str(e)}")
         return None
 
+def get_ai_config():
+    """Busca metadados públicos do provedor de IA no backend."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/config/ai", timeout=5)
+        if response.status_code == 200:
+            return response.json()
+        return {"provider": "unknown", "is_real": False, "key_configured": False}
+    except Exception:
+        return {"provider": "unknown", "is_real": False, "key_configured": False}
+
+
 def get_ai_status():
     """Verifica o status do provedor de IA."""
     try:
@@ -155,14 +152,35 @@ def main():
         st.error("❌ API não está respondendo. Verifique se o serviço está rodando.")
         st.stop()
 
+    # Exige IA real configurada no backend — sem chave, sandbox não funciona
+    ai_config = get_ai_config()
+    if not ai_config.get("is_real") or not ai_config.get("key_configured"):
+        st.error(
+            "🚫 **Sandbox indisponível: IA real não configurada.**\n\n"
+            "Este ambiente exige um provedor de IA real com chave válida. "
+            "Configure `AI_PROVIDER` (gemini, groq ou openai) e a chave "
+            "correspondente no `.env` da API, reinicie o backend e recarregue "
+            "esta página.\n\n"
+            f"Provedor atual: `{ai_config.get('provider', 'unknown')}` — "
+            "o modo `fake` serve apenas para testes automatizados."
+        )
+        st.stop()
+
+    ai_status = get_ai_status()
+    if not ai_status.get("responded"):
+        st.error(
+            f"🚫 **O provedor `{ai_config['provider']}` não respondeu.** "
+            f"Verifique a chave no `.env` da API. Detalhe: {ai_status.get('error')}"
+        )
+        st.stop()
+
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Configurações")
-        api_key = st.secrets.get("SANDBOX_API_KEY", "")
-        if api_key:
-            st.info(f"API Key: {api_key[:20]}...")
-        else:
-            st.info("API Key não configurada")
+        st.info(
+            f"🤖 IA real ativa: **{ai_config['provider']}**"
+            + (f" (`{ai_config['model']}`)" if ai_config.get("model") else "")
+        )
 
         st.divider()
 
@@ -170,22 +188,9 @@ def main():
         page = st.radio(
             "Navegação",
             ["🏠 Início", "🧪 Classificar", "📊 Histórico"],
+            key="page",
             label_visibility="collapsed"
         )
-
-    # Status do provedor de IA (endpoint /health/ai)
-    st.header("🤖 Status da IA")
-    n8n_status = get_ai_status()
-    if n8n_status["responded"]:
-        status_color = "🟢"
-        status_text = "Operacional"
-    else:
-        status_color = "🔴"
-        status_text = "Indisponível"
-
-    st.markdown(f"""
-    **Provedor**: {status_color} {status_text} ({n8n_status['provider']})
-    """)
 
     # Renderiza os elementos da UI
     if page == "🏠 Início":
@@ -196,255 +201,173 @@ def main():
         render_history()
 
 def render_home():
-    """Página inicial com resumo."""
-    st.header("🏠 Dashboard")
+    """Página inicial: visão geral do sandbox (sem executar testes)."""
+    st.header("📖 Como funciona o Sandbox")
 
-    # Status da IA consultado uma vez e reutilizado nos cards
-    ai_status = get_ai_status()
-    provider = ai_status["provider"]
-    delta_ia = "Operacional" if ai_status["responded"] else "Sem resposta"
+    st.markdown("""
+    Este é um ambiente controlado para testar a classificação de mensagens
+    de clientes com **IA real**. Toda requisição é enviada à API FastAPI,
+    validada com Pydantic e processada pelo fluxo de automação.
+    """)
 
-    # Cards de estatísticas
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric("Provedor de IA", provider, delta=delta_ia)
-
-    with col2:
-        try:
-            response = requests.get(f"{API_BASE_URL}/messages", params={"limit": 1}, timeout=5)
-            if response.status_code == 200:
-                messages = response.json()
-                st.metric("Mensagens Processadas", len(messages), delta="Total")
-            else:
-                st.metric("Mensagens Processadas", "0", delta="Sem dados")
-        except Exception:
-            st.metric("Mensagens Processadas", "Erro", delta="Indisponível")
-
-    st.divider()
-
-    st.header("📝 Como Testar")
-
-    col1, col2 = st.columns(2)
+    st.subheader("Fluxo de ponta a ponta")
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.subheader("🧪 Opção 1: Teste Rápido")
-        st.markdown("""
-        1. Digite uma mensagem no campo de classificação
-        2. Clique em **"Classificar"** (sem salvar no banco)
-        3. Veja o resultado imediatamente
-
-        **Vantagem**: Resultado instantâneo sem persistência.
-        """)
-
-        with st.expander("Exemplos de mensagens"):
-            examples = [
-                "Meu pedido ainda não chegou, o que aconteceu?",
-                "Gostaria de saber o status da minha fatura de 123456",
-                "O produto está muito ruim, devolvo agora!",
-                "Obrigado pelo atendimento, ótimo produto!"
-            ]
-            for ex in examples:
-                if st.button(ex, key=f"ex_1_{hash(ex)}"):
-                    st.session_state.current_text = ex
-                    st.session_state.page = "🧪 Classificar"
+        st.markdown("**1️⃣ Escreva**")
+        st.caption("Na aba **🧪 Classificar**, informe a mensagem do cliente.")
 
     with col2:
-        st.subheader("⚡ Opção 2: Fluxo Completo")
-        st.markdown("""
-        1. Digite uma mensagem
-        2. Clique em **"Salvar & Notificar n8n"**
-        3. A mensagem é salva no banco e o n8n recebe o webhook
-        4. Visualize o resultado completo no histórico
+        st.markdown("**2️⃣ IA classifica**")
+        st.caption(
+            "O prompt estruturado gera um JSON com categoria, setor, "
+            "prioridade, sentimento, resumo e confiança."
+        )
 
-        **Vantagem**: Simula o fluxo de produção real.
-        """)
+    with col3:
+        st.markdown("**3️⃣ Escolha o destino**")
+        st.caption(
+            "**Resposta rápida** devolve só a classificação. "
+            "**Salvar + notificar** persiste no Postgres e dispara o n8n."
+        )
 
-        with st.expander("Exemplos de mensagens"):
-            examples = [
-                "Estou com problema na minha conta, preciso de ajuda urgente",
-                "Gostaria de falar com o setor de financeiro",
-                "O produto chegou com defeito, preciso de troca",
-                "Aproveitamento do desconto para compra futura"
-            ]
-            for ex in examples:
-                if st.button(ex, key=f"ex_2_{hash(ex)}"):
-                    st.session_state.current_text = ex
-                    st.session_state.page = "🧪 Classificar"
+    with col4:
+        st.markdown("**4️⃣ Consulte**")
+        st.caption(
+            "Na aba **📊 Histórico** você vê as mensagens salvas e o status "
+            "da notificação."
+        )
 
     st.divider()
+    st.info(
+        "👉 **Comece por aqui:** abra **🧪 Classificar** no menu lateral, "
+        "escolha o modo de teste e envie uma mensagem de exemplo."
+    )
 
-    st.header("📊 Exemplo de Resultado")
-
+    st.subheader("Exemplo ilustrativo de classificação")
     example = {
         "categoria": "reclamacao",
         "setor": "logistica",
         "prioridade": "alta",
         "sentimento": "negativo",
         "resumo": "Cliente relata atraso na entrega do pedido.",
-        "confianca": 0.92
+        "confianca": 0.92,
     }
-
     col1, col2, col3 = st.columns(3)
-
     with col1:
-        st.metric("Categoria", example["categoria"].title(), delta="")
-
+        st.metric("Categoria", example["categoria"].title())
     with col2:
-        st.metric("Setor", example["setor"].title(), delta="")
-
+        st.metric("Setor", example["setor"].title())
     with col3:
-        st.metric("Prioridade", example["prioridade"].upper(), delta="")
+        st.metric("Prioridade", example["prioridade"].upper())
 
-    st.markdown(f"""
-    **Resumo**: {example['resumo']} (Confiança: {example['confianca']:.2f})
-    """)
+    st.markdown(
+        f"**Resumo**: {example['resumo']} "
+        f"(Confiança: {example['confianca']:.2f})"
+    )
+
+    with st.expander("Ver exemplos de mensagens para testar"):
+        exemplos = [
+            "Meu pedido ainda não chegou, o que aconteceu?",
+            "Gostaria de saber o status da minha fatura de 123456",
+            "O produto está muito ruim, devolvo agora!",
+            "Obrigado pelo atendimento, ótimo produto!",
+        ]
+        for ex in exemplos:
+            if st.button(ex, key=f"ex_{hash(ex)}"):
+                st.session_state.pending_text = ex
+                st.session_state.page = "🧪 Classificar"
+                st.rerun()
+
 
 def render_classifier():
-    """Página de classificação."""
-    st.header("🧪 Classificador de Mensagens")
+    """Página de classificação: IA real sempre ativa, com 2 modos de teste."""
+    st.header("🧪 Classificar Mensagem")
+    st.caption("✅ IA real sempre ativa — a chave está configurada no backend.")
 
-    # Coluna esquerda: Input
-    with st.columns([1, 2])[0]:
-        st.subheader("Digite sua mensagem")
-        texto = st.text_area(
-            "Mensagem:",
-            height=200,
-            placeholder="Digite aqui sua mensagem para classificar...",
-            label_visibility="collapsed"
+    pending = st.session_state.pop("pending_text", "")
+    texto = st.text_area(
+        "Mensagem:",
+        value=pending,
+        height=180,
+        placeholder="Digite aqui a mensagem do cliente...",
+    )
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        modo = st.radio(
+            "Modo de teste",
+            ["Resposta rápida (sem salvar)", "Salvar + notificar n8n"],
+            horizontal=True,
+            key="modo_teste",
         )
+    with col2:
+        submit_btn = st.button("🎯 Processar", use_container_width=True, type="primary")
 
-        col1, col2, col3 = st.columns(3)
+    if submit_btn and not texto.strip():
+        st.warning("Digite uma mensagem antes de processar.")
+        return
 
-        with col1:
-            use_real_ai = st.checkbox(
-                "Usar IA Real",
-                value=False,
-                help="Marque para usar modelos reais (OpenAI/Gemini/Groq)"
-            )
-
-        with col2:
-            modo_fluxo = st.selectbox(
-                "Modo de execução:",
-                ["Classificar (Rápido)", "Salvar & Notificar"],
-                label_visibility="collapsed"
-            )
-
-        with col3:
-            submit_btn = st.button("🎯 Processar", use_container_width=True)
-
-    # Coluna direita: Resultado
-    with st.columns([2, 1])[1]:
-        st.subheader("Status do Processo")
-
-        status_placeholder = st.empty()
-
-        if "classificacao" in st.session_state:
-            # Renderiza resultado
-            resultado = st.session_state.classificacao
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                delta = ""
-                if resultado["prioridade"] == "alta":
-                    delta = "🔴 Alta"
-                elif resultado["prioridade"] == "media":
-                    delta = "🟡 Média"
-                else:
-                    delta = "🟢 Baixa"
-
-                st.metric("Prioridade", resultado["prioridade"].upper(), delta=delta)
-
-            with col2:
-                st.metric("Categoria", resultado["categoria"].title(), delta="")
-
-            with col3:
-                st.metric("Setor", resultado["setor"].title(), delta="")
-
-            st.metric("Sentimento", resultado["sentimento"].title(), delta="")
-
-            st.markdown(f"""
-            **Confiança**: {resultado['confianca']:.2f}
-            **Resumo**: {resultado['resumo']}
-            """)
-
-            if resultado["confianca"] < 0.6:
-                st.warning("⚠️ Confiança baixa - provável necessidade de revisão humana")
-            else:
-                st.success("✅ Confiança alta - classificação confiável")
-
-        elif "processed_message" in st.session_state:
-            # Renderiza mensagem processada completa
-            resultado = st.session_state.processed_message
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                delta = ""
-                if resultado["classificacao"]["prioridade"] == "alta":
-                    delta = "🔴 Alta"
-                elif resultado["classificacao"]["prioridade"] == "media":
-                    delta = "🟡 Média"
-                else:
-                    delta = "🟢 Baixa"
-
-                st.metric("Prioridade", resultado["classificacao"]["prioridade"].upper(), delta=delta)
-
-            with col2:
-                st.metric("Categoria", resultado["classificacao"]["categoria"].title(), delta="")
-
-            with col3:
-                st.metric("Setor", resultado["classificacao"]["setor"].title(), delta="")
-
-            st.metric("Sentimento", resultado["classificacao"]["sentimento"].title(), delta="")
-
-            st.markdown(f"""
-            **Confiança**: {resultado['classificacao']['confianca']:.2f}
-            **Resumo**: {resultado['classificacao']['resumo']}
-            """)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.metric("Provedor", resultado["provedor"], delta="")
-
-            with col2:
-                if resultado["notificado"]:
-                    st.metric("Status n8n", "✅ Notificado", delta_color="inverse")
-                else:
-                    st.metric("Status n8n", "❌ Não notificado", delta_color="inverse")
-
-            if resultado["notificado"]:
-                st.success("✅ Mensagem salva e notificada com sucesso!")
-
-    # Ações
-    if submit_btn and texto:
-        with status_placeholder.container():
-            status_placeholder.info("⏳ Processando...")
-
-        try:
-            if modo_fluxo == "Salvar & Notificar":
+    if submit_btn:
+        with st.spinner("Classificando com IA real..."):
+            if modo == "Salvar + notificar n8n":
+                st.session_state.classificacao = None
                 result = save_and_notify(texto)
-
                 if result:
                     st.session_state.processed_message = result
-                    st.success("✅ Mensagem processada com sucesso!")
+                    st.success("✅ Mensagem salva e notificada!")
             else:
-                result = classify_text(texto, use_real_ai=use_real_ai)
-
+                st.session_state.processed_message = None
+                result = classify_text(texto)
                 if result:
                     st.session_state.classificacao = result
                     st.success("✅ Classificação concluída!")
 
-        except Exception as e:
-            st.error(f"❌ Erro: {str(e)}")
+    st.divider()
 
-    # Botão para limpar
-    if st.button("🔄 Limpar Resultados", type="secondary"):
+    resultado = st.session_state.get("classificacao") or st.session_state.get("processed_message")
+    if not resultado:
+        st.info("O resultado da classificação aparecerá aqui.")
+        return
+
+    classificacao = resultado.get("classificacao", resultado)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        prioridade = classificacao["prioridade"]
+        delta = {"alta": "🔴 Alta", "media": "🟡 Média"}.get(prioridade, "🟢 Baixa")
+        st.metric("Prioridade", prioridade.upper(), delta=delta)
+    with col2:
+        st.metric("Categoria", classificacao["categoria"].title())
+    with col3:
+        st.metric("Setor", classificacao["setor"].title())
+
+    st.metric("Sentimento", classificacao["sentimento"].title())
+    st.markdown(
+        f"**Resumo**: {classificacao['resumo']}  \n"
+        f"**Confiança**: {classificacao['confianca']:.2f}"
+    )
+    if classificacao["confianca"] < 0.6:
+        st.warning("⚠️ Confiança baixa — provável necessidade de revisão humana.")
+    else:
+        st.success("✅ Confiança alta — classificação confiável.")
+
+    if "processed_message" in st.session_state and st.session_state.processed_message:
+        pm = st.session_state.processed_message
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Provedor", pm["provedor"])
+        with col2:
+            st.metric(
+                "Status n8n",
+                "✅ Notificado" if pm["notificado"] else "❌ Não notificado",
+            )
+        st.caption(f"ID: `{pm.get('id', '—')}` · Criado em: {pm.get('criado_em', '—')}")
+
+    if st.button("🔄 Limpar resultado"):
         st.session_state.classificacao = None
         st.session_state.processed_message = None
-        status_placeholder.empty()
+        st.rerun()
+
 
 def render_history():
     """Página de histórico de mensagens."""

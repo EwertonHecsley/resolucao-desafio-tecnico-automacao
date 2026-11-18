@@ -1,15 +1,16 @@
 # Frontend Sandbox
 
-Interface web (Streamlit) para testar o classificador de mensagens com IA.
-Feita para o recrutador testar visualmente todo o fluxo: classificação →
-persistência → webhook n8n.
+Interface web (Streamlit) para testar o classificador de mensagens com **IA
+real**. Feita para o recrutador testar visualmente todo o fluxo: classificação
+→ persistência → webhook n8n.
 
 ## Funcionalidades
 
-- 🧪 **Teste Rápido**: Classifica mensagens sem salvar no banco
-- ⚡ **Fluxo Completo**: Salva no banco e notifica o n8n
-- 📊 **Histórico**: Visualização de todas as mensagens processadas
-- 🤖 **Status da IA**: Provedor ativo e saúde do endpoint
+- 🧪 **Resposta rápida**: classifica com IA real, sem salvar
+- ⚡ **Salvar + notificar n8n**: salva no banco e dispara o webhook
+- 📊 **Histórico**: mensagens persistidas e status da notificação
+- 🔒 **Somente IA real**: o sandbox bloqueia o uso se `AI_PROVIDER=fake` ou se
+  a chave do provedor não estiver configurada no `.env` da API
 
 ## Tecnologias
 
@@ -60,14 +61,13 @@ SANDBOX_API_KEY = "kodie-sandbox-token"
 ## Páginas
 
 ### 🏠 Início
-- Dashboard com estatísticas
-- Instruções de como testar
-- Exemplos de mensagens
+- Visão geral do fluxo (como funciona o sandbox)
+- Exemplos de mensagens que abrem a tela de classificação
 
 ### 🧪 Classificar
 - Campo de input para mensagens
-- Modos: Classificar (Rápido) vs Salvar & Notificar
-- Visualização imediata dos resultados
+- Modos: **Resposta rápida (sem salvar)** vs **Salvar + notificar n8n**
+- IA real sempre ativa; resultados exibidos imediatamente
 
 ### 📊 Histórico
 - Lista de mensagens salvas
@@ -94,9 +94,12 @@ pytest tests/frontend/ -v
 - Fora do Docker, `API_BASE_URL` aponta para `http://api:8000` — suba a
   API pelo compose ou ajuste a URL em `frontend/app.py`
 
-### IA não funciona
-- Verifique `AI_PROVIDER` no `.env` (padrão: `fake`)
-- Para IA real, configure a chave do provedor (ex.: `GROQ_API_KEY`)
+### IA não funciona / sandbox bloqueado
+- O sandbox exige `AI_PROVIDER` real (`gemini`, `groq` ou `openai`) e a chave
+  correspondente no `.env` da **API** (não no frontend)
+- Após alterar o `.env`, reinicie a API e recarregue a página
+- Confira `GET http://localhost:8000/api/v1/config/ai` e
+  `GET http://localhost:8000/api/v1/health/ai`
 
 ### Mensagens não aparecem no histórico
 - Verifique se `DATABASE_URL` está configurada no `.env`
