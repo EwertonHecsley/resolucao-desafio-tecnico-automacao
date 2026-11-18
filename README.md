@@ -385,7 +385,7 @@ montado somente-leitura em `/workflows`.
 - Foi feita varredura no histórico do git e nos arquivos versionados: não há
   chaves de API, senhas ou tokens reais.
 
-## Aceite — SPEC-09 (mapeado ao PDF, seções 6 a 9)
+## Aceites
 
 - [x] API FastAPI funcional
 - [x] Integração com modelo de IA (via porta `AIProvider`)
