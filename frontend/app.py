@@ -274,10 +274,24 @@ def render_home():
             "Obrigado pelo atendimento, ótimo produto!",
         ]
         for ex in exemplos:
-            if st.button(ex, key=f"ex_{hash(ex)}"):
-                st.session_state.pending_text = ex
-                st.session_state.page = "🧪 Classificar"
-                st.rerun()
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                if st.button(ex, key=f"ex_{hash(ex)}"):
+                    st.session_state.pending_text = ex
+                    st.session_state.page = "🧪 Classificar"
+                    st.rerun()
+            with col2:
+                # Botão de copiar para área de transferência
+                st.markdown(
+                    f'''
+                    <button id="exemplo-btn-{hash(ex)}" onclick="navigator.clipboard.writeText(
+                    '{ex.replace("'", "'\\\\''").replace("\\n", "\\n")}")
+                    )" style="background-color: #f1f5f9; border: 1px solid #cbd5e1;
+                    padding: 8px; border-radius: 6px; cursor: pointer; font-size: 14px;
+                    margin-left: 8px;">📋</button>
+                    ''',
+                    unsafe_allow_html=True,
+                )
 
 
 def render_classifier():
