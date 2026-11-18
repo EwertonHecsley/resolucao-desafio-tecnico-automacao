@@ -1,9 +1,17 @@
 
+from pathlib import Path
+
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Configurações da API
 API_BASE_URL = "http://api:8000/api/v1"
+copy_message_button = components.declare_component(
+    "copy_message_button",
+    path=str(Path(__file__).parent / "components" / "copy_message_button"),
+)
+
 
 @st.cache_resource
 def get_api_key() -> str:
@@ -131,15 +139,22 @@ def get_ai_status():
         return {"provider": "unknown", "responded": False, "error": str(e)}
     return {"provider": "unknown", "responded": False}
 
+
+def select_message_example(text: str) -> None:
+    """Prepara a mensagem de exemplo e abre a classificação manual."""
+    st.session_state["pending_text"] = text
+    st.session_state["page"] = "🧪 Classificar"
+
+
 def main():
     st.set_page_config(
-        page_title="Kodie Sandbox - IA Classifier",
+        page_title="Área Sandbox - IA Classifier",
         page_icon="🎯",
         layout="wide",
         initial_sidebar_state="expanded"
     )
 
-    st.title("🎯 Kodie Sandbox - Classificador com IA")
+    st.title("🎯 Área Sandbox - Classificador com IA")
     st.markdown("""
     Ambiente de demonstração para testar o classificador de mensagens com IA.
     O fluxo completo inclui: classificação → persistência → notificação n8n.
@@ -174,7 +189,7 @@ def main():
         )
         st.stop()
 
-    # Sidebar
+    # Menu lateral (sem key: evita conflito de sessão ao mudar de página)
     with st.sidebar:
         st.header("⚙️ Configurações")
         st.info(
@@ -188,17 +203,21 @@ def main():
         page = st.radio(
             "Navegação",
             ["🏠 Início", "🧪 Classificar", "📊 Histórico"],
-            key="page",
+            index=["🏠 Início", "🧪 Classificar", "📊 Histórico"].index(
+                st.session_state.get("page", "🏠 Início")
+            ),
             label_visibility="collapsed"
         )
+        st.session_state.page = page
 
-    # Renderiza os elementos da UI
-    if page == "🏠 Início":
+    # Renderiza a página selecionada
+    if st.session_state.page == "🏠 Início":
         render_home()
-    elif page == "🧪 Classificar":
+    elif st.session_state.page == "🧪 Classificar":
         render_classifier()
-    elif page == "📊 Histórico":
+    elif st.session_state.page == "📊 Histórico":
         render_history()
+
 
 def render_home():
     """Página inicial: visão geral do sandbox (sem executar testes)."""
@@ -274,10 +293,22 @@ def render_home():
             "Obrigado pelo atendimento, ótimo produto!",
         ]
         for ex in exemplos:
-            if st.button(ex, key=f"ex_{hash(ex)}"):
-                st.session_state.pending_text = ex
-                st.session_state.page = "🧪 Classificar"
-                st.rerun()
+            copied_example = copy_message_button(
+                text=ex,
+                key=f"copy_example_{ex}",
+                default=None,
+            )
+            if (
+                copied_example
+                and copied_example.get("clickId")
+                != st.session_state.get("handled_copy_click")
+            ):
+                st.session_state.handled_copy_click = copied_example["clickId"]
+                if copied_example.get("copied"):
+                    select_message_example(copied_example["text"])
+                    st.rerun()
+                else:
+                    st.error("Não foi possível copiar a mensagem para a área de transferência.")
 
 
 def render_classifier():

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #f1f5f9;
+            color: #1f2937;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        button:hover {
+            background: #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <button id="copy-button" type="button"></button>
+    <script>
+        const button = document.getElementById("copy-button");
+        let messageText = "";
+
+        function sendMessage(type, data) {
+            window.parent.postMessage(
+                { isStreamlitMessage: true, type, ...data },
+                "*"
+            );
+        }
+
+        function setComponentValue(value) {
+            sendMessage("streamlit:setComponentValue", {
+                value,
+                dataType: "json",
+            });
+        }
+
+        function createClickId() {
+            return globalThis.crypto?.randomUUID?.()
+                ?? `${Date.now()}-${Math.random()}`;
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                setComponentValue({ text, copied: true, clickId: createClickId() });
+            } catch {
+                let copied = false;
+                const temporaryInput = document.createElement("textarea");
+                try {
+                    temporaryInput.value = text;
+                    temporaryInput.style.position = "fixed";
+                    temporaryInput.style.opacity = "0";
+                    document.body.appendChild(temporaryInput);
+                    temporaryInput.select();
+                    copied = document.execCommand("copy");
+                } catch {
+                    copied = false;
+                } finally {
+                    temporaryInput.remove();
+                }
+                setComponentValue({ text, copied, clickId: createClickId() });
+            }
+        }
+
+        button.addEventListener("click", () => copyText(messageText));
+        window.addEventListener("message", (event) => {
+            if (event.data.type !== "streamlit:render") {
+                return;
+            }
+            messageText = event.data.args.text;
+            button.textContent = `📋 Copiar e usar: ${messageText}`;
+        });
+
+        sendMessage("streamlit:componentReady", { apiVersion: 1 });
+        sendMessage("streamlit:setFrameHeight", { height: 44 });
+    </script>
+</body>
+</html>
