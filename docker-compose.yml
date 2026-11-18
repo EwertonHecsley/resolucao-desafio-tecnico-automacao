@@ -123,8 +123,10 @@ services:
     ports:
       - "8501:8501"
     environment:
-      # Expose a API key do .env se configurada
-      API_KEY: ${API_KEY:-}
+      # Token que o frontend envia no header X-API-Key.
+      # Deve coincidir com API_KEY do serviço api quando a autenticação
+      # estiver ativada (SPEC-06). Padrão: kodie-sandbox-token.
+      SANDBOX_API_KEY: ${SANDBOX_API_KEY:-kodie-sandbox-token}
     profiles:
       - demo  # Executa apenas com --profile demo
 

@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o código
+# Copia o código e configurações do Streamlit
 COPY frontend/ ./frontend/
+COPY .streamlit/ ./.streamlit/
 
 # Configura variáveis de ambiente
 ENV PYTHONUNBUFFERED=1

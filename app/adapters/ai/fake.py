@@ -1,5 +1,4 @@
 """FakeAIProvider para testes — simula provedor de IA sem chamar API real.
-
 Programável: recebe uma fila de respostas brutas e devolve uma por
 chamada. Itens especiais permitem simular falhas (para testar retry e
 erro 502 nas próximas SPECs).
@@ -9,10 +8,29 @@ from __future__ import annotations
 
 from typing import Final
 
+import json
+
+from pydantic import ValidationError
+
 from domain.errors import AIProviderError
+from domain.models import Classification
 
 #: Item especial que, ao ser consumido da fila, levanta AIProviderError.
 MARCADOR_ERRO: Final[str] = "__erro__"
+
+#: Resposta padrão válida quando nenhuma resposta é configurada.
+#    Esta resposta permite que o fluxo funcione imediatamente com AI_PROVIDER=fake
+#    sem precisar configurar respostas manualmente.
+RESPOSTA_PADRAO: Final[str] = json.dumps(
+    {
+        "categoria": "duvida",
+        "setor": "geral",
+        "prioridade": "baixa",
+        "sentimento": "neutro",
+        "resumo": "Mensagem recebida para classificação.",
+        "confianca": 0.5,
+    }
+)
 
 
 class FakeAIProvider:
@@ -32,10 +50,13 @@ class FakeAIProvider:
         Args:
             respostas: Respostas brutas a devolver, uma por chamada de
                 ``generate_json``. Um item ``"__erro__"`` simula falha do
-                provedor. Se ``None``, todas as chamadas falham por fila
-                vazia.
+                provedor. Se ``None`` ou vazio, uma resposta padrão válida é usada.
         """
-        self._respostas: list[str] = list(respostas) if respostas is not None else []
+        if respostas and len(respostas) > 0:
+            self._respostas: list[str] = list(respostas)
+        else:
+            # Usa a resposta padrão quando nenhuma é configurada
+            self._respostas: list[str] = [RESPOSTA_PADRAO]
 
     async def generate_json(self, system_prompt: str, user_prompt: str) -> str:
         """Devolve a próxima resposta da fila (FIFO) ou levanta erro.
@@ -49,8 +70,7 @@ class FakeAIProvider:
             A resposta bruta programada.
 
         Raises:
-            AIProviderError: Se o item consumido for o marcador de erro ou
-                se a fila estiver vazia.
+            AIProviderError: Se o item consumido for o marcador de erro.
         """
         self._system_prompt = system_prompt
         self._user_prompt = user_prompt

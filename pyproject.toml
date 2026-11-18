@@ -23,6 +23,10 @@ dev = [
     "mypy>=1.11.0",
     "black>=24.8.0",
     "isort>=5.13.0",
+    # Dependências do frontend sandbox (frontend/app.py), necessárias
+    # para rodar os testes de frontend localmente.
+    "streamlit>=1.37.0",
+    "requests>=2.32.0",
 ]
 
 [build-system]

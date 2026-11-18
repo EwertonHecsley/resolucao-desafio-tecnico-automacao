@@ -1,14 +1,17 @@
 """Testes unitários para o frontend sandbox."""
 
-import sys
-from pathlib import Path
-
-# Adiciona frontend ao path
-sys.path.insert(0, str(Path(__file__).parent.parent / "frontend"))
-
 from unittest.mock import patch
 
 import pytest
+
+from frontend.app import (  # noqa: F401 — reexporta para os asserts abaixo
+    API_BASE_URL,
+    classify_text,
+    fetch_recent_messages,
+    get_ai_status,
+    health_check,
+    save_and_notify,
+)
 
 
 class MockResponse:
@@ -67,10 +70,14 @@ def test_api_base_url():
 
 @patch("frontend.app.requests.get")
 def test_health_check_success(mock_get):
-    """Testa health check com sucesso."""
+    """Testa health check com sucesso.
+
+    ``/health`` é rota raiz da API (fora do prefixo ``/api/v1``),
+    por isso a URL completa é usada e não ``API_BASE_URL``.
+    """
     mock_get.return_value = MockResponse(200)
     assert health_check() is True
-    mock_get.assert_called_once_with(f"{API_BASE_URL}/health", timeout=5)
+    mock_get.assert_called_once_with("http://api:8000/health", timeout=5)
 
 
 @patch("frontend.app.requests.get")

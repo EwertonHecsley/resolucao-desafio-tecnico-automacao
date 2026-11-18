@@ -1,8 +1,6 @@
-import streamlit as st
+
 import requests
-import json
-import time
-from datetime import datetime
+import streamlit as st
 
 # Configurações da API
 API_BASE_URL = "http://api:8000/api/v1"
@@ -12,15 +10,21 @@ SANDBOX_API_KEY = "kodie-sandbox-token"
 
 @st.cache_resource
 def get_api_key():
-    """Retorna a API key do ambiente."""
-    return st.secrets.get("API_KEY", "kodie-sandbox-token") or SANDBOX_API_KEY
+    """Retorna a API key do sandbox.
+
+    Lê SANDBOX_API_KEY (não API_KEY): o Streamlit promove chaves de
+    secrets.toml para os.environ, e API_KEY é a setting de autenticação
+    do backend (SPEC-06) — colisão que exigiria X-API-Key nas rotas.
+    """
+    return st.secrets.get("SANDBOX_API_KEY", "") or SANDBOX_API_KEY
 
 def health_check():
     """Verifica se a API está saudável."""
     try:
-        response = requests.get(f"{API_BASE_URL}/health", timeout=5)
+        # Endpoint /health está no nível raiz da API, não sob /api/v1
+        response = requests.get("http://api:8000/health", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 def fetch_recent_messages(limit=10):
@@ -52,13 +56,22 @@ def classify_text(texto, use_real_ai=False):
         if api_key:
             headers["X-API-Key"] = api_key
 
-        # Usa o endpoint de classificação rápida (sem salvar)
-        endpoint = "/classify" if use_real_ai else "/classify"
+        # Se usar IA real, chama /api/v1/classify (salva e notifica)
+        # Se usar modo sandbox, chama /api/v1/classify (apenas classifica)
+        if use_real_ai:
+            # Fluxo completo com persistência e notificação
+            endpoint = "/messages"
+            timeout = 30
+        else:
+            # Apenas classificação (sem persistência)
+            endpoint = "/classify"
+            timeout = 5
+
         response = requests.post(
             f"{API_BASE_URL}{endpoint}",
             json=payload,
             headers=headers,
-            timeout=30 if use_real_ai else 5
+            timeout=timeout
         )
 
         if response.status_code == 200:
@@ -145,7 +158,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Configurações")
-        api_key = st.secrets.get("API_KEY", "")
+        api_key = st.secrets.get("SANDBOX_API_KEY", "")
         if api_key:
             st.info(f"API Key: {api_key[:20]}...")
         else:
@@ -160,8 +173,8 @@ def main():
             label_visibility="collapsed"
         )
 
-    # Visualização do n8n
-    st.header("🔄 Fluxo n8n")
+    # Status do provedor de IA (endpoint /health/ai)
+    st.header("🤖 Status da IA")
     n8n_status = get_ai_status()
     if n8n_status["responded"]:
         status_color = "🟢"
@@ -171,7 +184,7 @@ def main():
         status_text = "Indisponível"
 
     st.markdown(f"""
-    **Status do n8n**: {status_color} {status_text} ({n8n_status['provider']})
+    **Provedor**: {status_color} {status_text} ({n8n_status['provider']})
     """)
 
     # Renderiza os elementos da UI
@@ -186,27 +199,18 @@ def render_home():
     """Página inicial com resumo."""
     st.header("🏠 Dashboard")
 
+    # Status da IA consultado uma vez e reutilizado nos cards
+    ai_status = get_ai_status()
+    provider = ai_status["provider"]
+    delta_ia = "Operacional" if ai_status["responded"] else "Sem resposta"
+
     # Cards de estatísticas
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(2)
 
     with col1:
-        st.metric("Modo de IA", "Fake (Simulação)", delta_color="inverse")
+        st.metric("Provedor de IA", provider, delta=delta_ia)
 
     with col2:
-        try:
-            response = requests.get(f"{API_BASE_URL}/health/ai", timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                responded = data.get("responded", False)
-                provider = data.get("provider", "unknown")
-                if responded:
-                    st.metric("Provedor IA", provider, delta="Operacional")
-                else:
-                    st.metric("Provedor IA", provider, delta="Não respondido")
-        except:
-            st.metric("Provedor IA", "Erro", delta="Indisponível")
-
-    with col3:
         try:
             response = requests.get(f"{API_BASE_URL}/messages", params={"limit": 1}, timeout=5)
             if response.status_code == 200:
@@ -214,7 +218,7 @@ def render_home():
                 st.metric("Mensagens Processadas", len(messages), delta="Total")
             else:
                 st.metric("Mensagens Processadas", "0", delta="Sem dados")
-        except:
+        except Exception:
             st.metric("Mensagens Processadas", "Erro", delta="Indisponível")
 
     st.divider()
