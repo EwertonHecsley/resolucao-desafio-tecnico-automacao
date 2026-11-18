@@ -60,6 +60,9 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   api:
     build:
@@ -78,6 +81,12 @@ services:
       N8N_WEBHOOK_URL: http://n8n:5678/webhook/classificador
       # (Opcional) substituir por config real
       API_KEY: ${API_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
     env_file:
       - .env
 
@@ -101,6 +110,25 @@ services:
       - ./n8n/workflows:/workflows:ro
     profiles:
       - import  # Executa apenas com --profile import
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: classificador-frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    environment:
+      # Token que o frontend envia no header X-API-Key.
+      # Deve coincidir com API_KEY do serviço api quando a autenticação
+      # estiver ativada (SPEC-06). Padrão: kodie-sandbox-token.
+      SANDBOX_API_KEY: ${SANDBOX_API_KEY:-kodie-sandbox-token}
+    profiles:
+      - demo  # Executa apenas com --profile demo
 
 volumes:
   postgres_data:

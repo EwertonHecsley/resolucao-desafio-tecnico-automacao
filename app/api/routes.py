@@ -13,8 +13,10 @@ from app.api.deps import (
     get_classifier_service,
     get_message_repository,
     get_notifier,
+    get_settings,
     require_api_key,
 )
+from app.config import Settings
 from domain.models import Classification, MessageIn, ProcessedMessage
 from domain.ports import MessageRepository, Notifier
 from services.classifier import ClassifierService
@@ -160,6 +162,40 @@ async def get_message(id: str, repo: MessageRepository = Depends(get_message_rep
     return mensagem
 
 
+@router.get("/config/ai")
+async def get_ai_config(settings: Settings = Depends(get_settings)):
+    """Retorna a configuração pública do provedor de IA para o frontend.
+
+    Nenhuma chave ou segredo é exposto — apenas metadados para que o sandbox
+    possa exigir IA real antes de permitir testes.
+
+    Args:
+        settings: Configurações injetadas.
+
+    Returns:
+        Dict com provider, is_real, key_configured e model.
+    """
+    provider = settings.AI_PROVIDER
+    chaves = {
+        "gemini": "GEMINI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+    modelos = {
+        "gemini": "GEMINI_MODEL",
+        "groq": "GROQ_MODEL",
+        "openai": "OPENAI_MODEL",
+    }
+    nome_chave = chaves.get(provider)
+    chave = getattr(settings, nome_chave, "") if nome_chave else ""
+    return {
+        "provider": provider,
+        "is_real": provider != "fake",
+        "key_configured": bool(nome_chave) and bool(chave.strip()),
+        "model": getattr(settings, modelos[provider], "") if provider in modelos else "",
+    }
+
+
 @router.get("/health/ai")
 async def health_ai(ai=Depends(get_ai_provider)):
     """Testa se o provedor de IA ativo responde.
@@ -175,8 +211,13 @@ async def health_ai(ai=Depends(get_ai_provider)):
     """
     logger.debug("Health check do provedor de IA: %s", ai.name)
     try:
-        # Chamada dummy para testar se o provedor responde
-        await ai.generate_json("test", "test")
+        # Chamada dummy para testar se o provedor responde. O conteúdo
+        # menciona "json" porque o Groq exige a palavra nas mensagens
+        # quando response_format é json_object (senão devolve HTTP 400).
+        await ai.generate_json(
+            "Responda apenas com JSON.",
+            'Teste de saúde: retorne um objeto JSON {"ok": true}.',
+        )
         return {"provider": ai.name, "responded": True}
     except Exception as e:
         logger.warning("Provedor de IA respondeu com erro: %s", e)

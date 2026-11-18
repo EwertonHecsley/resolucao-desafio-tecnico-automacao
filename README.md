@@ -23,8 +23,10 @@ valida, salva e repassa o resultado; o n8n aplica as regras de negócio
 (roteamento por setor e revisão humana quando a confiança é baixa).
 
 O projeto foi pensado para ser **simples de executar e fácil de demonstrar**:
-com `AI_PROVIDER=fake` ele funciona sem chave de API e sem internet, e com
-Docker Compose sobe API, banco e n8n em um único comando.
+com Docker Compose sobe API, banco e n8n em um único comando. O **Frontend
+Sandbox exige IA real** — configure `AI_PROVIDER` (gemini, groq ou openai) e a
+chave correspondente no `.env`. O modo `fake` existe somente para testes
+automatizados e é bloqueado pela interface web.
 
 ### 2. Problema escolhido (caso 4.1)
 
@@ -232,6 +234,7 @@ docker compose up --build
 | --- | --- | --- |
 | API | http://localhost:8000 | `/health`, `/docs`, `/api/v1/messages` |
 | n8n | http://localhost:5678 | Editor de fluxos |
+| Frontend Sandbox | http://localhost:8501 | Interface web para testar (com --profile demo) |
 | Postgres | localhost:5432 | bancos `classificador` e `n8n_db` |
 
 Importar o workflow do n8n automaticamente (uma vez, após o n8n ficar saudável):
@@ -244,6 +247,22 @@ Ou manualmente no n8n: **Import from File** → `n8n/workflows/classificador.jso
 → **ativar o fluxo (toggle)**. A rota usada é `/webhook/classificador`
 (produção). O toggle precisa estar ligado, senão a API receberá falha na
 notificação e `notificado` ficará `false`.
+
+Para iniciar o **Frontend Sandbox** (interface web para testes):
+
+> ⚠️ Configure `AI_PROVIDER` com um provedor real e sua chave no `.env` antes
+> de subir o frontend. Sem isso, o sandbox exibe o aviso de configuração e
+> bloqueia os testes — o modo `fake` não é aceito.
+
+```bash
+docker compose --profile demo up --build frontend
+```
+
+Isso abrirá http://localhost:8501 com:
+- **Início**: visão geral de como funciona o sandbox
+- **Classificar**: testes com IA real — `Resposta rápida (sem salvar)` ou
+  `Salvar + notificar n8n`
+- **Histórico**: mensagens persistidas e status do n8n
 
 `docker compose down && docker compose up` preserva os volumes `postgres_data`
 e `n8n_data` (dados do Postgres e fluxos do n8n). Para recriar do zero, use
@@ -293,7 +312,8 @@ ruff check .
    (`*_MODEL`).
 3. **Fallback automático:** `AI_FALLBACK_PROVIDERS=groq,gemini` faz o
    `FallbackAIProvider` tentar o próximo provedor em caso de erro.
-4. **Demonstração sem chave ou internet:** `AI_PROVIDER=fake`.
+4. **Modo `fake`:** reservado aos testes automatizados (`pytest`); o
+   Frontend Sandbox o rejeita e exige provedor real com chave.
 5. **Novo provedor:** criar `adapters/ai/novo.py` implementando `generate_json`,
    registrar na factory e adicionar as variáveis ao `.env.example`. Nada em
    `services/` ou `api/` muda.
@@ -365,7 +385,7 @@ montado somente-leitura em `/workflows`.
 - Foi feita varredura no histórico do git e nos arquivos versionados: não há
   chaves de API, senhas ou tokens reais.
 
-## Aceite — SPEC-09 (mapeado ao PDF, seções 6 a 9)
+## Aceites
 
 - [x] API FastAPI funcional
 - [x] Integração com modelo de IA (via porta `AIProvider`)
@@ -379,5 +399,6 @@ montado somente-leitura em `/workflows`.
 - [x] JSON do n8n exportado (`n8n/workflows/classificador.json`, sem credenciais)
 - [x] `.env.example` sem segredos e nenhuma chave no repositório (histórico conferido)
 - [x] Diferencial: Dockerfile + docker-compose.yml + instruções detalhadas no README
+- [x] Frontend Sandbox com Streamlit para testes (com --profile demo)
 - [x] Link do repositório GitHub:
-      https://github.com/EwertonHecsley/resolucao-desafio-tecnico-automacao
+       https://github.com/EwertonHecsley/resolucao-desafio-tecnico-automacao

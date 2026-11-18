@@ -62,3 +62,15 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.pyc
+
+# Streamlit
+.streamlit/
+.streamlit/logs/
+
+# Frontend
+frontend/__pycache__/
+frontend/.streamlit/
+frontend/.streamlit/logs/
+frontend/.streamlit/secrets.toml
+frontend/.streamlit/sessions/
+frontend/.streamlit/datastore/
