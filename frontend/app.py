@@ -1,6 +1,7 @@
 
 import requests
 import streamlit as st
+from streamlit.components.v1 import html as st_html
 
 # Configurações da API
 API_BASE_URL = "http://api:8000/api/v1"
@@ -174,33 +175,20 @@ def main():
         )
         st.stop()
 
-    # Sidebar
-    with st.sidebar:
-        st.header("⚙️ Configurações")
-        st.info(
-            f"🤖 IA real ativa: **{ai_config['provider']}**"
-            + (f" (`{ai_config['model']}`)" if ai_config.get("model") else "")
-        )
+    # Exige instância do menu lateral DENTRO da render_home
+    pending = st.session_state.pop("pending_text", "")
+    modo = st.session_state.pop("modo_teste", "Resposta rápida (sem salvar)")
+    refresh_btn = st.session_state.pop("refresh_btn", False)
 
-        st.divider()
+    st.session_state.page = render_home(pending, modo, refresh_btn)
 
-        st.header("📋 Menu")
-        page = st.radio(
-            "Navegação",
-            ["🏠 Início", "🧪 Classificar", "📊 Histórico"],
-            key="page",
-            label_visibility="collapsed"
-        )
-
-    # Renderiza os elementos da UI
-    if page == "🏠 Início":
-        render_home()
-    elif page == "🧪 Classificar":
+    if st.session_state.page == "🧪 Classificar":
         render_classifier()
-    elif page == "📊 Histórico":
+    elif st.session_state.page == "📊 Histórico":
         render_history()
 
-def render_home():
+
+def render_home(pending_text: str = "", modo_teste: str = "Resposta rápida (sem salvar)", refresh: bool = False):
     """Página inicial: visão geral do sandbox (sem executar testes)."""
     st.header("📖 Como funciona o Sandbox")
 
@@ -274,11 +262,41 @@ def render_home():
             "Obrigado pelo atendimento, ótimo produto!",
         ]
         for ex in exemplos:
-            # Botão de exemplo para testar
-            if st.button(ex, key=f"ex_{hash(ex)}"):
-                st.session_state.pending_text = ex
-                st.session_state.page = "🧪 Classificar"
-                st.rerun()
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                if st.button(ex, key=f"ex_{hash(ex)}"):
+                    st.session_state.pending_text = ex
+                    return "🧪 Classificar"
+            with col2:
+                # Copiar para área de transferência usando HTML com CSP
+                ex_js = ex.replace("\\", "\\\\").replace("'", "\\'")
+                html_code = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Copy to Clipboard</title>
+                    <script>
+                        function copyText(text) {{
+                            navigator.clipboard.writeText(text)
+                            document.body.style.backgroundColor = '#dcfce7';
+                            setTimeout(() => {{ document.body.style.backgroundColor = ''; }}, 300);
+                            alert('Copiado para área de transferência!');
+                        }}
+                    </script>
+                </head>
+                <body>
+                    <button onclick="copyText('{ex_js}')" 
+                            style="background-color: #f1f5f9; border: 1px solid #cbd5e1;
+                                   padding: 8px 12px; border-radius: 6px; cursor: pointer;
+                                   font-size: 14px; display: inline-flex; align-items: center;
+                                   gap: 4px;">
+                        📋 Copiar
+                    </button>
+                </body>
+                </html>
+                """
+                st_html(html_code, height=60, scrolling=False, key=f"copy_html_{hash(ex)}")
 
 
 def render_classifier():
